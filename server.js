@@ -88,6 +88,31 @@ app.post('/api/auth', async (req, res) => {
   res.json({ token, user: { id: user.id, email: user.email, role: user.role, plan: user.plan } });
 });
 
+// Auth
+app.post('/api/auth', async (req, res) => {
+  const { email, password } = req.body;
+  let user = (await pool.query('SELECT * FROM users WHERE email=$1', [email])).rows[0];
+  if (!user) {
+    const hash = await bcrypt.hash(password, 10);
+    user = (await pool.query(
+      'INSERT INTO users(email,password,role) VALUES($1,$2,$3) RETURNING id,email,role,plan',
+      [email, hash, 'admin']
+    )).rows[0];
+  } else if (!await bcrypt.compare(password, user.password)) {
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  const token = jwt.sign({ id: user.id, role: user.role }, 'supersecret');
+  res.json({ token, user: { id: user.id, email: user.email, role: user.role, plan: user.plan } });
+});
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+const host = '0.0.0.0';
+const port = process.env.PORT || 3000;
+app.listen(port, host, () => console.log(`Running on ${host}:${port}`));
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
